@@ -2,25 +2,26 @@
 
 专为 OpenClaw 设计的备份、恢复、迁移工具。
 
-## 功能
-
-- 🔍 **扫描** - 全盘扫描 OpenClaw 相关文件
-- 💾 **备份** - 备份配置、记忆、workspace
-- 📥 **恢复** - 从备份恢复
-- 🚀 **迁移** - 一键迁移到远程服务器
-
 ## 一键运行
 
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/mango082888-bit/vps-tools/main/openclaw-migrate/migrate.sh)
+curl -sL https://raw.githubusercontent.com/mango082888-bit/vps-tools/main/openclaw-migrate/migrate.sh | bash
 ```
 
-## 备份内容
+## 功能菜单
 
-- `~/.openclaw/` 标准目录
-- 自定义 workspace 路径
-- MEMORY.md、AGENTS.md 等记忆文件
-- openclaw.json 配置文件
+1. **扫描** - 全盘扫描 OpenClaw 相关文件
+2. **整体备份** - 备份全部数据(配置+记忆)
+3. **仅备份记忆** - 只备份 MEMORY.md 和日志
+4. **恢复** - 从备份恢复
+5. **迁移** - 一键迁移到远程服务器
+
+## 两种备份模式
+
+| 模式 | 内容 | 适用场景 |
+|------|------|----------|
+| 整体备份 | 配置+记忆+全部数据 | 新机器还没装 OpenClaw |
+| 仅记忆 | MEMORY.md + daily logs | 已装好，只想同步记忆 |
 
 ## 支持系统
 

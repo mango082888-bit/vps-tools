@@ -31,12 +31,13 @@ show_menu() {
     echo "请选择操作:"
     echo ""
     echo "  1) 扫描 - 扫描本机 OpenClaw 相关文件"
-    echo "  2) 备份 - 备份 OpenClaw 数据"
-    echo "  3) 恢复 - 从备份恢复"
-    echo "  4) 迁移 - 迁移到远程服务器"
+    echo "  2) 整体备份 - 备份全部数据(配置+记忆)"
+    echo "  3) 仅备份记忆 - 只备份 MEMORY.md 和日志"
+    echo "  4) 恢复 - 从备份恢复"
+    echo "  5) 迁移 - 迁移到远程服务器"
     echo "  0) 退出"
     echo ""
-    read -p "请输入选项 [0-4]: " choice
+    read -p "请输入选项 [0-5]: " choice
 }
 
 # 检测系统类型
@@ -172,6 +173,66 @@ EOFINFO
     echo ""
 }
 
+# 仅备份记忆
+backup_memory_only() {
+    log_info "开始备份记忆文件..."
+    
+    BACKUP_NAME="openclaw-memory-${TIMESTAMP}"
+    BACKUP_PATH="${BACKUP_DIR}/${BACKUP_NAME}"
+    mkdir -p "$BACKUP_PATH"
+    
+    STANDARD_PATH="$HOME_DIR/.openclaw"
+    
+    # 备份标准 workspace 中的记忆
+    if [ -d "$STANDARD_PATH/workspace" ]; then
+        mkdir -p "$BACKUP_PATH/workspace"
+        [ -f "$STANDARD_PATH/workspace/MEMORY.md" ] && cp "$STANDARD_PATH/workspace/MEMORY.md" "$BACKUP_PATH/workspace/"
+        [ -f "$STANDARD_PATH/workspace/AGENTS.md" ] && cp "$STANDARD_PATH/workspace/AGENTS.md" "$BACKUP_PATH/workspace/"
+        [ -f "$STANDARD_PATH/workspace/SOUL.md" ] && cp "$STANDARD_PATH/workspace/SOUL.md" "$BACKUP_PATH/workspace/"
+        [ -f "$STANDARD_PATH/workspace/USER.md" ] && cp "$STANDARD_PATH/workspace/USER.md" "$BACKUP_PATH/workspace/"
+        [ -d "$STANDARD_PATH/workspace/memory" ] && cp -r "$STANDARD_PATH/workspace/memory" "$BACKUP_PATH/workspace/"
+        log_ok "标准 workspace 记忆备份完成"
+    fi
+    
+    # 备份自定义 workspace 中的记忆
+    if [ -f "$STANDARD_PATH/openclaw.json" ]; then
+        WORKSPACE=$(grep -o '"workspace"[[:space:]]*:[[:space:]]*"[^"]*"' "$STANDARD_PATH/openclaw.json" 2>/dev/null | head -1 | cut -d'"' -f4)
+        if [ -n "$WORKSPACE" ] && [ -d "$WORKSPACE" ]; then
+            mkdir -p "$BACKUP_PATH/custom-workspace"
+            [ -f "$WORKSPACE/MEMORY.md" ] && cp "$WORKSPACE/MEMORY.md" "$BACKUP_PATH/custom-workspace/"
+            [ -f "$WORKSPACE/AGENTS.md" ] && cp "$WORKSPACE/AGENTS.md" "$BACKUP_PATH/custom-workspace/"
+            [ -f "$WORKSPACE/SOUL.md" ] && cp "$WORKSPACE/SOUL.md" "$BACKUP_PATH/custom-workspace/"
+            [ -f "$WORKSPACE/USER.md" ] && cp "$WORKSPACE/USER.md" "$BACKUP_PATH/custom-workspace/"
+            [ -d "$WORKSPACE/memory" ] && cp -r "$WORKSPACE/memory" "$BACKUP_PATH/custom-workspace/"
+            echo "$WORKSPACE" > "$BACKUP_PATH/custom-workspace/.original_path"
+            log_ok "自定义 workspace 记忆备份完成"
+        fi
+    fi
+    
+    # 生成备份信息
+    cat > "$BACKUP_PATH/backup-info.json" << EOFINFO
+{
+    "type": "memory-only",
+    "version": "${VERSION}",
+    "timestamp": "${TIMESTAMP}",
+    "hostname": "$(hostname)"
+}
+EOFINFO
+    
+    # 打包
+    ARCHIVE="${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
+    cd "$BACKUP_DIR"
+    tar -czf "$ARCHIVE" "$BACKUP_NAME"
+    rm -rf "$BACKUP_PATH"
+    
+    ARCHIVE_SIZE=$(du -h "$ARCHIVE" | cut -f1)
+    echo ""
+    log_ok "记忆备份完成!"
+    echo "   📦 文件: $ARCHIVE"
+    echo "   📊 大小: $ARCHIVE_SIZE"
+    echo ""
+}
+
 # 恢复功能
 restore_openclaw() {
     log_info "恢复 OpenClaw 备份..."
@@ -281,8 +342,9 @@ main() {
         case $choice in
             1) scan_openclaw ;;
             2) backup_openclaw ;;
-            3) restore_openclaw ;;
-            4) migrate_openclaw ;;
+            3) backup_memory_only ;;
+            4) restore_openclaw ;;
+            5) migrate_openclaw ;;
             0) echo "再见!"; exit 0 ;;
             *) log_err "无效选项" ;;
         esac
