@@ -44,7 +44,8 @@ async def check_url(url, keyword):
 async def start(update: Update, ctx):
     if update.effective_user.id != ADMIN_ID: return
     kb = [[InlineKeyboardButton("📋 VPS列表", callback_data="list")],
-          [InlineKeyboardButton("🔍 补货监控", callback_data="monitors")]]
+          [InlineKeyboardButton("🔍 补货监控", callback_data="monitors")],
+          [InlineKeyboardButton("⚙️ 设置", callback_data="settings")]]
     await update.message.reply_text("🖥️ *管理面板*", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 async def help_cmd(update: Update, ctx):
@@ -66,8 +67,53 @@ async def help_cmd(update: Update, ctx):
 async def back_main(u, c):
     await u.callback_query.answer()
     kb = [[InlineKeyboardButton("📋 VPS列表", callback_data="list")],
-          [InlineKeyboardButton("🔍 补货监控", callback_data="monitors")]]
+          [InlineKeyboardButton("🔍 补货监控", callback_data="monitors")],
+          [InlineKeyboardButton("⚙️ 设置", callback_data="settings")]]
     await u.callback_query.edit_message_text("🖥️ *管理面板*", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+# 设置菜单
+async def settings_menu(u, c):
+    await u.callback_query.answer()
+    data = load_data()
+    days = data.get("remind_days", [7, 3, 1])
+    msg = f"⚙️ *设置*\n\n📅 提醒天数: {', '.join(map(str, sorted(days, reverse=True)))}天"
+    kb = [[InlineKeyboardButton("📅 修改提醒天数", callback_data="set_days")],
+          [InlineKeyboardButton("« 返回", callback_data="back_main")]]
+    await u.callback_query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+# 设置提醒天数
+async def set_days_menu(u, c):
+    await u.callback_query.answer()
+    data = load_data()
+    days = data.get("remind_days", [7, 3, 1])
+    msg = f"📅 *提醒天数设置*\n\n当前: {', '.join(map(str, sorted(days, reverse=True)))}天\n\n点击切换开关:"
+    kb = []
+    for d in [30, 14, 7, 3, 1]:
+        status = "✅" if d in days else "⬜"
+        kb.append([InlineKeyboardButton(f"{status} {d}天", callback_data=f"toggle_day_{d}")])
+    kb.append([InlineKeyboardButton("« 返回", callback_data="settings")])
+    await u.callback_query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+# 切换提醒天数
+async def toggle_day(u, c):
+    await u.callback_query.answer()
+    day = int(u.callback_query.data.split("_")[2])
+    data = load_data()
+    days = data.get("remind_days", [7, 3, 1])
+    if day in days:
+        days.remove(day)
+    else:
+        days.append(day)
+    data["remind_days"] = sorted(days, reverse=True)
+    save_data(data)
+    # 刷新菜单
+    msg = f"📅 *提醒天数设置*\n\n当前: {', '.join(map(str, data['remind_days']))}天\n\n点击切换开关:"
+    kb = []
+    for d in [30, 14, 7, 3, 1]:
+        status = "✅" if d in data["remind_days"] else "⬜"
+        kb.append([InlineKeyboardButton(f"{status} {d}天", callback_data=f"toggle_day_{d}")])
+    kb.append([InlineKeyboardButton("« 返回", callback_data="settings")])
+    await u.callback_query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 # VPS列表
 async def show_list(u, c):
@@ -350,6 +396,9 @@ def main():
     app.add_handler(CallbackQueryHandler(mon_del_start, pattern="^mon_del$"))
     app.add_handler(CallbackQueryHandler(mon_del_confirm, pattern="^mdel_"))
     app.add_handler(CallbackQueryHandler(mon_check, pattern="^mon_check$"))
+    app.add_handler(CallbackQueryHandler(settings_menu, pattern="^settings$"))
+    app.add_handler(CallbackQueryHandler(set_days_menu, pattern="^set_days$"))
+    app.add_handler(CallbackQueryHandler(toggle_day, pattern="^toggle_day_"))
     
     # 定时任务
     app.job_queue.run_daily(check_expire, time=time(9, 0))
