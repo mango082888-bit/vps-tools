@@ -233,9 +233,51 @@ EOFINFO
     echo ""
 }
 
+# 辅助函数：仅恢复记忆文件
+restore_memory_files() {
+    local SRC="$1"
+    local STANDARD_PATH="$HOME_DIR/.openclaw"
+    
+    # 从 dot-openclaw/workspace 恢复记忆
+    if [ -d "$SRC/dot-openclaw/workspace" ]; then
+        mkdir -p "$STANDARD_PATH/workspace/memory"
+        [ -f "$SRC/dot-openclaw/workspace/MEMORY.md" ] && cp "$SRC/dot-openclaw/workspace/MEMORY.md" "$STANDARD_PATH/workspace/"
+        [ -f "$SRC/dot-openclaw/workspace/AGENTS.md" ] && cp "$SRC/dot-openclaw/workspace/AGENTS.md" "$STANDARD_PATH/workspace/"
+        [ -f "$SRC/dot-openclaw/workspace/SOUL.md" ] && cp "$SRC/dot-openclaw/workspace/SOUL.md" "$STANDARD_PATH/workspace/"
+        [ -f "$SRC/dot-openclaw/workspace/USER.md" ] && cp "$SRC/dot-openclaw/workspace/USER.md" "$STANDARD_PATH/workspace/"
+        [ -d "$SRC/dot-openclaw/workspace/memory" ] && cp -r "$SRC/dot-openclaw/workspace/memory"/* "$STANDARD_PATH/workspace/memory/" 2>/dev/null
+        log_ok "标准 workspace 记忆恢复完成"
+    fi
+    
+    # 从 workspace 目录恢复（仅记忆备份格式）
+    if [ -d "$SRC/workspace" ]; then
+        mkdir -p "$STANDARD_PATH/workspace/memory"
+        [ -f "$SRC/workspace/MEMORY.md" ] && cp "$SRC/workspace/MEMORY.md" "$STANDARD_PATH/workspace/"
+        [ -d "$SRC/workspace/memory" ] && cp -r "$SRC/workspace/memory"/* "$STANDARD_PATH/workspace/memory/" 2>/dev/null
+        log_ok "记忆文件恢复完成"
+    fi
+    
+    # 恢复自定义 workspace 记忆
+    if [ -d "$SRC/custom-workspace" ]; then
+        ORIG_PATH=$(cat "$SRC/custom-workspace/.original_path" 2>/dev/null)
+        if [ -n "$ORIG_PATH" ]; then
+            mkdir -p "$ORIG_PATH/memory"
+            [ -f "$SRC/custom-workspace/MEMORY.md" ] && cp "$SRC/custom-workspace/MEMORY.md" "$ORIG_PATH/"
+            [ -d "$SRC/custom-workspace/memory" ] && cp -r "$SRC/custom-workspace/memory"/* "$ORIG_PATH/memory/" 2>/dev/null
+            log_ok "自定义 workspace 记忆恢复完成"
+        fi
+    fi
+}
+
 # 恢复功能
 restore_openclaw() {
     log_info "恢复 OpenClaw 备份..."
+    
+    echo ""
+    echo "选择恢复模式:"
+    echo "  1) 整体恢复 - 恢复全部数据"
+    echo "  2) 仅恢复记忆 - 只恢复 MEMORY.md 和日志"
+    read -p "请选择 [1-2]: " restore_mode
     
     read -p "请输入备份文件路径: " ARCHIVE
     
@@ -267,26 +309,30 @@ restore_openclaw() {
         return 0
     fi
     
-    # 恢复标准路径
-    if [ -d "$RESTORE_PATH/dot-openclaw" ]; then
-        log_info "恢复到 $HOME_DIR/.openclaw ..."
-        rm -rf "$HOME_DIR/.openclaw"
-        cp -r "$RESTORE_PATH/dot-openclaw" "$HOME_DIR/.openclaw"
-        log_ok "标准路径恢复完成"
-    fi
-    
-    # 恢复自定义 workspace
-    if [ -d "$RESTORE_PATH/custom-workspace" ]; then
-        ORIG_PATH=$(cat "$RESTORE_PATH/custom-workspace/.original_path" 2>/dev/null)
-        if [ -n "$ORIG_PATH" ]; then
-            read -p "恢复自定义 Workspace 到 $ORIG_PATH? (y/n): " ws_confirm
-            if [ "$ws_confirm" = "y" ]; then
-                mkdir -p "$ORIG_PATH"
-                cp -r "$RESTORE_PATH/custom-workspace"/* "$ORIG_PATH/" 2>/dev/null || true
-                rm -f "$ORIG_PATH/.original_path"
-                log_ok "自定义 Workspace 恢复完成"
+    if [ "$restore_mode" = "1" ]; then
+        # 整体恢复
+        if [ -d "$RESTORE_PATH/dot-openclaw" ]; then
+            log_info "恢复到 $HOME_DIR/.openclaw ..."
+            rm -rf "$HOME_DIR/.openclaw"
+            cp -r "$RESTORE_PATH/dot-openclaw" "$HOME_DIR/.openclaw"
+            log_ok "标准路径恢复完成"
+        fi
+        
+        if [ -d "$RESTORE_PATH/custom-workspace" ]; then
+            ORIG_PATH=$(cat "$RESTORE_PATH/custom-workspace/.original_path" 2>/dev/null)
+            if [ -n "$ORIG_PATH" ]; then
+                read -p "恢复自定义 Workspace 到 $ORIG_PATH? (y/n): " ws_confirm
+                if [ "$ws_confirm" = "y" ]; then
+                    mkdir -p "$ORIG_PATH"
+                    cp -r "$RESTORE_PATH/custom-workspace"/* "$ORIG_PATH/" 2>/dev/null || true
+                    rm -f "$ORIG_PATH/.original_path"
+                    log_ok "自定义 Workspace 恢复完成"
+                fi
             fi
         fi
+    else
+        # 仅恢复记忆
+        restore_memory_files "$RESTORE_PATH"
     fi
     
     rm -rf "$RESTORE_DIR"
@@ -298,14 +344,25 @@ restore_openclaw() {
 migrate_openclaw() {
     log_info "迁移 OpenClaw 到远程服务器..."
     
+    echo ""
+    echo "选择迁移模式:"
+    echo "  1) 整体迁移 - 迁移全部数据"
+    echo "  2) 仅迁移记忆 - 只迁移 MEMORY.md 和日志"
+    read -p "请选择 [1-2]: " migrate_mode
+    
     read -p "远程服务器 (user@host): " REMOTE
     read -p "SSH 端口 [22]: " PORT
     PORT=${PORT:-22}
     
-    # 先备份
-    backup_openclaw
+    # 根据模式选择备份
+    if [ "$migrate_mode" = "1" ]; then
+        backup_openclaw
+        ARCHIVE=$(ls -t ${BACKUP_DIR}/openclaw-backup-*.tar.gz 2>/dev/null | head -1)
+    else
+        backup_memory_only
+        ARCHIVE=$(ls -t ${BACKUP_DIR}/openclaw-memory-*.tar.gz 2>/dev/null | head -1)
+    fi
     
-    ARCHIVE=$(ls -t ${BACKUP_DIR}/openclaw-backup-*.tar.gz 2>/dev/null | head -1)
     if [ -z "$ARCHIVE" ]; then
         log_err "备份失败"
         return 1
@@ -317,17 +374,32 @@ migrate_openclaw() {
     REMOTE_FILE="/tmp/$(basename $ARCHIVE)"
     
     log_info "远程恢复..."
-    ssh -p "$PORT" "$REMOTE" "bash -s" << EOFREMOTE
+    if [ "$migrate_mode" = "1" ]; then
+        # 整体恢复
+        ssh -p "$PORT" "$REMOTE" "bash -s" << EOFREMOTE
 cd /tmp
 tar -xzf "$REMOTE_FILE"
 BACKUP_FOLDER=\$(ls -d openclaw-backup-* 2>/dev/null | head -1)
 if [ -d "\$BACKUP_FOLDER/dot-openclaw" ]; then
     rm -rf ~/.openclaw
     cp -r "\$BACKUP_FOLDER/dot-openclaw" ~/.openclaw
-    echo "标准路径恢复完成"
+    echo "整体恢复完成"
 fi
 rm -rf "\$BACKUP_FOLDER" "$REMOTE_FILE"
 EOFREMOTE
+    else
+        # 仅记忆恢复
+        ssh -p "$PORT" "$REMOTE" "bash -s" << EOFREMOTE
+cd /tmp
+tar -xzf "$REMOTE_FILE"
+BACKUP_FOLDER=\$(ls -d openclaw-memory-* 2>/dev/null | head -1)
+mkdir -p ~/.openclaw/workspace/memory
+[ -f "\$BACKUP_FOLDER/workspace/MEMORY.md" ] && cp "\$BACKUP_FOLDER/workspace/MEMORY.md" ~/.openclaw/workspace/
+[ -d "\$BACKUP_FOLDER/workspace/memory" ] && cp -r "\$BACKUP_FOLDER/workspace/memory"/* ~/.openclaw/workspace/memory/ 2>/dev/null
+echo "记忆恢复完成"
+rm -rf "\$BACKUP_FOLDER" "$REMOTE_FILE"
+EOFREMOTE
+    fi
     
     log_ok "迁移完成!"
 }
