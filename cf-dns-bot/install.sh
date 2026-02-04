@@ -11,7 +11,7 @@ echo ""
 # 获取用户输入
 read -p "请输入 Telegram Bot Token: " BOT_TOKEN
 read -p "请输入 Cloudflare API Token: " CF_TOKEN
-read -p "请输入你的 Telegram ID: " USER_ID
+read -p "请输入允许使用的 Telegram ID (多个用逗号分隔): " USER_ID
 
 echo ""
 echo "[*] 安装依赖..."
