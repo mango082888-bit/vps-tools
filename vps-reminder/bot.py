@@ -10,8 +10,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 DATA_FILE = os.getenv("DATA_FILE", "./data.json")
 
-ADD_NAME, ADD_PROVIDER, ADD_IP, ADD_DATE, ADD_PRICE = range(5)
+ADD_NAME, ADD_PROVIDER, ADD_IP, ADD_CYCLE, ADD_DATE, ADD_PRICE = range(6)
 MON_NAME, MON_URL, MON_KEYWORD = 10, 11, 12
+
+# 付费周期映射
+CYCLE_MAP = {"monthly": "月付", "quarterly": "季付", "yearly": "年付"}
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -127,8 +130,9 @@ async def show_list(u, c):
         for i, v in enumerate(data["vps"]):
             d = days_left(v['date'])
             s = "🟢" if d > 7 else "🟡" if d > 3 else "🔴"
+            cycle = CYCLE_MAP.get(v.get('cycle', 'monthly'), '月付')
             msg += f"{i+1}. {s} *{v['name']}*\n"
-            msg += f"   {v['provider']} | {d}天\n"
+            msg += f"   {v['provider']} | {cycle} | {d}天\n"
     kb = [[InlineKeyboardButton("➕ 添加", callback_data="add"),
            InlineKeyboardButton("🔄 Ping", callback_data="ping_all")],
           [InlineKeyboardButton("🗑️ 删除", callback_data="vps_del"),
@@ -157,7 +161,17 @@ async def add_provider(u, c):
 
 async def add_ip(u, c):
     c.user_data['ip'] = "" if u.message.text == "-" else u.message.text
-    await u.message.reply_text("到期日期 (2026-12-31)：")
+    kb = [[InlineKeyboardButton("月付", callback_data="cycle_monthly")],
+          [InlineKeyboardButton("季付", callback_data="cycle_quarterly")],
+          [InlineKeyboardButton("年付", callback_data="cycle_yearly")]]
+    await u.message.reply_text("选择付费周期：", reply_markup=InlineKeyboardMarkup(kb))
+    return ADD_CYCLE
+
+async def add_cycle(u, c):
+    await u.callback_query.answer()
+    cycle = u.callback_query.data.split("_")[1]
+    c.user_data['cycle'] = cycle
+    await u.callback_query.edit_message_text("到期日期 (2026-12-31)：")
     return ADD_DATE
 
 async def add_date(u, c):
@@ -171,6 +185,7 @@ async def add_price(u, c):
         "name": c.user_data['name'],
         "provider": c.user_data['provider'],
         "ip": c.user_data.get('ip', ''),
+        "cycle": c.user_data.get('cycle', 'monthly'),
         "date": c.user_data['date'],
         "price": "" if u.message.text == "-" else u.message.text
     })
@@ -357,6 +372,7 @@ def main():
             ADD_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_name)],
             ADD_PROVIDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_provider)],
             ADD_IP: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_ip)],
+            ADD_CYCLE: [CallbackQueryHandler(add_cycle, pattern="^cycle_")],
             ADD_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_date)],
             ADD_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_price)]
         },
